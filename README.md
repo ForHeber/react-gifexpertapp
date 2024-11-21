@@ -75,21 +75,7 @@ TITULO_FORMATO = int.TryParse(t.TITULO.Replace(".", ""), out var numero) ? numer
 Un árbol de expresión no puede contener una declaración de variable de argumento out. [C:\U
 
 
-var tareas = (
-    from t in _sidcecontext.Tareas
-    where (t.ESTADO == 1 || t.ESTADO == 2 || t.ESTADO == 9 || t.ESTADO == 10)
-    select new
-    {
-        ID = t.ID,
-        PLANID = t.PLANID,
-        TIPO_TAREAID = t.TIPO_TAREAID,
-        PADREID = t.PADREID,
-        NUMERO = t.NUMERO,
-        TIPO_PLANID = _sidcecontext.Planes.Where(p => p.ID == t.PLANID).FirstOrDefault(),
-        TITULO = t.TITULO,
-        // Otros campos...
-    }
-).AsEnumerable() // Pasar a memoria
+.AsEnumerable() // Procesar en memoria
 .Select(t => new
 {
     t.ID,
@@ -99,8 +85,45 @@ var tareas = (
     t.NUMERO,
     t.TIPO_PLANID,
     t.TITULO,
-    TITULO_FORMATO = int.TryParse(t.TITULO.Replace(".", ""), out var numero) ? numero : 0, // Procesamiento en memoria
-    // Otros campos...
+    TITULO_FORMATO = string.Join("", t.TITULO
+        .Split('.') // Dividir por puntos
+        .Select(part => part.PadLeft(3, '0'))), // Rellenar con ceros a la izquierda
+    t.DESCRIPCION,
+    t.PROPOSITO,
+    t.UNIDADCODIGO,
+    t.INICIO,
+    t.PLAZO,
+    t.PONDERADO,
+    t.CUMPLIMIENTO,
+    t.CUMPLIMIENTO_REAL,
+    t.PLANIFICADO,
+    t.ESTADO,
+    t.CREACION,
+    t.ACTUALIZACION,
+    t.NUMERO_DOCUMENTO,
+    t.PRIORIDADID,
+    t.PRIORIDAD,
+    t.UNIDAD,
+    t.ORDEN,
+    t.TIPO_DOMINIOID,
+    t.TIPO_DOMINIO,
+    t.TAREA,
+    t.ESTADOAVANCE,
+    t.VALIDACIONES,
+    t.UNIDADES_AFECTADAS,
+    t.UNIDADAFECTADA,
+    t.UNIDADAFECTADA2,
+    t.TIPO_TAREA,
+    t.ESTADOSITUACION,
+    t.ESTADOAVANCESUBTAREAPENDIENTE,
+    t.ESTADOAVANCESUBTAREAVALIDADO,
+    t.AJUSTESPENDIENTES,
+    t.AJUSTESPENDIENTESVALIDACION,
+    t.AJUSTESRECHAZADOS,
+    t.NOTIFICACIONNUEVA,
+    t.CIERRETAREA
 })
+.OrderBy(t => t.TITULO_FORMATO) // Ordenar por el formato ajustado
+.ToList();
 .OrderBy(t => t.TITULO_FORMATO)
 .ToList();
