@@ -127,3 +127,6 @@ Un árbol de expresión no puede contener una declaración de variable de argume
 .ToList();
 .OrderBy(t => t.TITULO_FORMATO)
 .ToList();
+
+
+The source 'IQueryable' doesn't implement 'IAsyncEnumerable<<>f__AnonymousType55`42[System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,Sidce.Entidades.Tareas.Plan,System.String,System.String,System.String,System.String,System.String,System.Nullable`1[System.DateTime],System.Nullable`1[System.DateTime],System.Single,System.Single,System.Single,System.Single,System.Int32,System.DateTime,System.DateTime,System.String,System.Int32,<>f__AnonymousType37`2[System.Int32,System.String],Sidce.Entidades.EntidadesInstitucionales.Unidad,System.Int32,System.Int32,Sidce.Entidades.Mantenedores.Tipo_Dominio,System.Int32,System.Int32,System.Int32,System.Collections.Generic.List`1[Sidce.Entidades.Tareas.Tarea_Afecta_Unidad],System.Collections.Generic.List`1[Sidce.Entidades.EntidadesInstitucionales.Unidad],Sidce.Entidades.Tareas.Tarea_Afecta_Unidad,Sidce.Entidades.Mantenedores.Tipo_Tarea,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32]>'. Only sources that implement 'IAsyncEnumerable' can be used for Entity Framework asynchronous operations.
