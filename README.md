@@ -72,375 +72,47 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/t
 
 TITULO_FORMATO = int.TryParse(t.TITULO.Replace(".", ""), out var numero) ? numero : 0, // Elimina puntos y convierte a número
 
-public async Task<ActionResult<List<ResponsePaginationTareaModel>>> GetTareas([FromQuery] int page, int tipo_plan_id, int planid, int tipo_tareaid, int padreid, string? busqueda, string? unidadCodigo, string? unidadfiltro, int? tipoPlanSearch, int? planesSearch, int? prioridadSearch, int? merodisiSearch, DateTime? fechaInicio, DateTime? fechaTermino)
-        {
-            var nivel = int.Parse(User.GetClaimValue("NivelAcceso"));
-            JsonStatusModel resp = new JsonStatusModel();
-
-            try
-            {
-                var tareas = (
-                    from t in _sidcecontext.Tareas
-                    where (t.ESTADO == 1 || t.ESTADO == 2 || t.ESTADO == 9 || t.ESTADO == 10) && t.PLANID == 6714
-                    select new
-                    {
-                        ID = t.ID,
-                        PLANID = t.PLANID,
-                        TIPO_TAREAID = t.TIPO_TAREAID,
-                        PADREID = t.PADREID,
-                        NUMERO = t.NUMERO,
-                        TIPO_PLANID = _sidcecontext.Planes.Where(p => p.ID == t.PLANID).FirstOrDefault(),
-                        TITULO = t.TITULO,
-                        DESCRIPCION = t.DESCRIPCION,
-                        PROPOSITO = t.PROPOSITO,
-                        UNIDADCODIGO = t.UNIDADCODIGO,
-                        INICIO = t.INICIO,
-                        PLAZO = t.PLAZO,
-                        PONDERADO = t.PONDERADO,
-                        CUMPLIMIENTO = t.CUMPLIMIENTO,
-                        CUMPLIMIENTO_REAL = t.CUMPLIMIENTO_REAL,
-                        PLANIFICADO = t.PLANIFICADO,
-                        ESTADO = t.ESTADO,
-                        CREACION = t.CREACION,
-                        ACTUALIZACION = t.ACTUALIZACION,
-                        NUMERO_DOCUMENTO = t.NUMERO_DOCUMENTO,
-                        PRIORIDADID = t.PRIORIDAD,
-                        PRIORIDAD = (from tt in _sidcecontext.Tareas
-                                     where t.ID == tt.ID
-                                     select new
-                                     {
-                                         ID = tt.PRIORIDAD,
-                                         DESCRIPCION = (
-                                             tt.PRIORIDAD == 1 ? "Baja" :
-                                             tt.PRIORIDAD == 2 ? "Media" :
-                                             tt.PRIORIDAD == 3 ? "Alta" : ""
-                                         )
-                                     }).FirstOrDefault(),
-                        UNIDAD = (
-                            from u in _sidcecontext.Unidades
-                            where u.CODIGO == t.UNIDADCODIGO
-                            select u
-                        ).FirstOrDefault(),
-                        ORDEN = (
-                            from pe in _sidcecontext.PlaneEstructuras
-                            join p in _sidcecontext.Planes on pe.TIPO_PLANID equals p.TIPO_PLANID
-                            where t.PLANID == p.ID && t.TIPO_TAREAID == pe.TIPO_TAREAID
-                            select pe.ORDEN
-                        ).FirstOrDefault(),
-                        TIPO_DOMINIOID = t.TIPO_DOMINIOID,
-                        TIPO_DOMINIO = (
-                            from d in _sidcecontext.Tipo_Dominios
-                            where d.ID == t.TIPO_DOMINIOID
-                            select d
-                        ).FirstOrDefault(),
-                        TAREA = (
-                            from t2 in _sidcecontext.Tareas
-                            where t.ID == t2.PADREID && (t2.ESTADO == 1 || t2.ESTADO == 2 || t2.ESTADO == 3)
-                            select t2
-                        ).Count(),
-                        ESTADOAVANCE = (
-                            from ea in _sidcecontext.Estados_Avance
-                            where t.ID == ea.TAREAID && (ea.ESTADO == 2 && ea.TIPO_ENTIDADID == 1)
-                            select ea
-                        ).Count(),
-                        VALIDACIONES = (
-                            from ea in _sidcecontext.Estados_Avance
-                            join v in _sidcecontext.Validaciones on ea.ID equals v.ENTIDADID
-                            where t.ID == ea.TAREAID && (ea.ESTADO == 2 && ea.TIPO_ENTIDADID == 1) && v.ESTADO == 4
-                            select ea
-                        ).Count(),
-                        UNIDADES_AFECTADAS = (
-                            _sidcecontext.Tarea_Afecta_Unidad.Where(TAU => TAU.TAREAID == t.ID && TAU.ESTADO == 1)
-                        ).ToList(),
-                        UNIDADAFECTADA = (
-                            from u in _sidcecontext.Unidades
-                            join tau in _sidcecontext.Tarea_Afecta_Unidad on u.CODIGO equals tau.UNIDADCODIGO
-                            where t.ID == tau.TAREAID && tau.ESTADO == 1
-                            select u
-                        ).ToList(),
-                        UNIDADAFECTADA2 = (
-                            from tu in _sidcecontext.Tarea_Afecta_Unidad
-                            join u in _sidcecontext.Unidades on tu.UNIDADCODIGO  equals u.CODIGO
-                            where t.ID == tu.TAREAID && tu.ESTADO == 1
-                            select tu
-                        ).FirstOrDefault(),
-                        TIPO_TAREA = (
-                            from tt in _sidcecontext.Tipos_Tareas
-                            where tt.ID == t.TIPO_TAREAID
-                            select tt
-                        ).FirstOrDefault(),
-                        ESTADOSITUACION = (
-                            from ea in _sidcecontext.Estados_Avance
-                            join t2 in _sidcecontext.Tareas on ea.TAREAID equals t2.ID
-                            where t.ID == t2.PADREID && ((ea.ESTADO == 7  || ea.ESTADO == 8) && ea.TIPO_ENTIDADID == 4) && t2.ESTADO == 1
-                            select ea
-                        ).Count(),
-                        ESTADOAVANCESUBTAREAPENDIENTE = (
-                            from ea in _sidcecontext.Estados_Avance
-                            join t2 in _sidcecontext.Tareas on ea.TAREAID equals t2.ID
-                            join p2 in _sidcecontext.Planes on t2.PLANID equals p2.ID
-                            where t.ID == t2.PADREID && ea.TIPO_ENTIDADID == 1 && t2.ESTADO == 1 && ea.ESTADO == 2 && p2.ESTADO == 1
-                            select ea
-                        ).Count(),
-                        ESTADOAVANCESUBTAREAVALIDADO = (
-                            from ea in _sidcecontext.Estados_Avance
-                            join t2 in _sidcecontext.Tareas on ea.TAREAID equals t2.ID
-                            where t2.PADREID == t.ID && ea.TIPO_ENTIDADID == 1 && t2.ESTADO == 1 && ea.ESTADO == 1
-                            select ea
-                        ).Count()
-                        ,
-                        AJUSTESPENDIENTES = (
-                            from a in _sidcecontext.Ajustes
-                            join t2 in _sidcecontext.Tareas on a.TAREAID equals t2.ID
-                            join p2 in _sidcecontext.Planes on t2.PLANID equals p2.ID
-                            where t.ID == t2.PADREID && t2.ESTADO == 1 && a.ESTADO == 2 && p2.ESTADO == 1
-                            select a
-                        ).Count(),
-                        AJUSTESPENDIENTESVALIDACION = (
-                            from v in _sidcecontext.Validaciones
-                            join a in _sidcecontext.Ajustes on v.ENTIDADID equals a.ID
-                            where t.ID == v.TAREAID && (v.ESTADO == 5 || v.ESTADO == 4 || v.ESTADO == 1) && v.TIPO_ENTIDADID == 2 && (a.ESTADO == 2 || a.ESTADO == 4)
-                            select v
-                        ).Count(),
-                        AJUSTESRECHAZADOS = (
-                            from a in _sidcecontext.Ajustes
-                            join t2 in _sidcecontext.Tareas on a.TAREAID equals t2.ID
-                            join p2 in _sidcecontext.Planes on t2.PLANID equals p2.ID
-                            where t.ID == t2.PADREID && t2.ESTADO == 1 && a.ESTADO == 6 && p2.ESTADO == 1
-                            select a
-                        ).Count(),
-                        NOTIFICACIONNUEVA = (
-                            from n in _sidcecontext.Notificacion
-                            where n.TAREAID == t.ID && n.PROPIETARIO != int.Parse(User.GetClaimValue("Run")) && !(
-                                from v in _sidcecontext.Visto
-                                where v.USUARIO == int.Parse(User.GetClaimValue("Run"))
-                                select v.NOTIFICACIONID
-                            ).Contains(n.ID)
-                            select n
-                        ).Count(),
-                        CIERRETAREA = (
-                            from v in _sidcecontext.Validaciones
-                            where v.ENTIDADID == t.ID && v.TIPO_ENTIDADID == 3 && v.ESTADO == 1
-                            select v
-                        ).Count(),
-                    }
-                )
-                // .OrderBy(res => res.TITULO)
-                .AsQueryable();
-
-
-                //Inicio de filtros
-                if (!string.IsNullOrWhiteSpace(busqueda))
-                {
-                    int numero = ObtenerNumeroEntero(busqueda);
-                    if (numero != 0)
-                    {
-                        tareas = tareas.Where(
-                        t => (t.ID == Int32.Parse(busqueda))
-                    ).AsQueryable();
-                    }
-                    else
-                    {
-                        tareas = tareas.Where(
-                        t => (t.DESCRIPCION.ToLower()).Contains(busqueda.ToLower())
-                        || (t.TIPO_PLANID.DESCRIPCION.ToLower()).Contains(busqueda.ToLower())
-                        // || t.ID == Int32.Parse(busqueda)
-                        // || (t.UNIDAD.SIGLA.ToLower()).Contains(busqueda.ToLower())
-                    ).AsQueryable();
-                    }
-                }
-
-                if (nivel == 3)
-                {
-                    var unidad = User.GetClaimValue("Unidad");
-                    tareas = tareas.Where(t => (t.UNIDADCODIGO == unidad)).AsQueryable();
-                }
-
-                if (planid != 0)
-                {
-                    tareas = tareas.Where(t => (t.PLANID == planid)).AsQueryable();
-                }
-                else
-                {
-                    if (!string.IsNullOrWhiteSpace(unidadCodigo))
-                    {
-                        var unidad = User.GetClaimValue("Unidad");
-                        tareas = tareas.Where(t => (t.UNIDADCODIGO == unidadCodigo)).AsQueryable();
-                    }
-                }
-
-                if (tipo_plan_id != 0)
-                {
-                    if (tipo_plan_id == 1)
-                        tareas = tareas.Where(t => (t.TIPO_PLANID.TIPO_PLANID == tipo_plan_id)).AsQueryable();
-                    else
-                        tareas = tareas.Where(t => (t.TIPO_PLANID.TIPO_PLANID != 1)).AsQueryable();
-                }
-                if (padreid > 0)
-                {
-                    tareas = tareas.Where(t => (t.PADREID == padreid)).AsQueryable();
-                }
-
-                if (tipo_tareaid != 0)
-                {
-                    tareas = tareas.Where(t => (t.TIPO_TAREAID == tipo_tareaid)).AsQueryable();
-                }
-
-                if (!string.IsNullOrWhiteSpace(unidadfiltro))
-                {
-                    tareas = tareas.Where(t => (t.UNIDADCODIGO == unidadfiltro)).AsQueryable();
-                }
-
-                if (tipoPlanSearch != 0)
-                {
-                    tareas = tareas.Where(t => (t.TIPO_PLANID.TIPO_PLANID == tipoPlanSearch)).AsQueryable();
-                }
-
-                if (planesSearch != 0)
-                {
-                    tareas = tareas.Where(t => (t.PLANID == planesSearch)).AsQueryable();
-                }
-
-                if (prioridadSearch != 0)
-                {
-                    tareas = tareas.Where(t => (t.PRIORIDADID == prioridadSearch)).AsQueryable();
-                }
-                if (merodisiSearch != 0)
-                {
-                    tareas = tareas.Where(t => (t.TIPO_DOMINIOID == merodisiSearch)).AsQueryable();
-                }
-                if (fechaInicio != null)
-                {
-                    tareas = tareas.Where(t => (t.INICIO == fechaInicio)).AsQueryable();
-                }
-                if (fechaTermino != null)
-                {
-                    tareas = tareas.Where(t => (t.PLAZO == fechaTermino)).AsQueryable();
-                }
-
-
-                // Ejecuta la consulta y materializa los datos (en memoria) antes de aplicar el Select complejo
-                // var tareasMaterializadas = await tarea.ToListAsync(); // Ejecuta la consulta asincrónicamente y materializa los datos
-                var tareasMaterializadas = tareas.ToList();
-
-                // Ahora, puedes aplicar transformaciones adicionales en memoria
-                var tarea =  tareasMaterializadas
-                    .Select(t => new
-                    {
-                        t.ID,
-                        t.PLANID,
-                        t.TIPO_TAREAID,
-                        t.PADREID,
-                        t.NUMERO,
-                        t.TIPO_PLANID,
-                        t.TITULO,
-                        TITULO_FORMATO = string.Join("", t.TITULO
-                            .Split('.') // Dividir por puntos
-                            .Select(part => part.PadLeft(3, '0'))), // Rellenar con ceros a la izquierda
-                        t.DESCRIPCION,
-                        t.PROPOSITO,
-                        t.UNIDADCODIGO,
-                        t.INICIO,
-                        t.PLAZO,
-                        t.PONDERADO,
-                        t.CUMPLIMIENTO,
-                        t.CUMPLIMIENTO_REAL,
-                        t.PLANIFICADO,
-                        t.ESTADO,
-                        t.CREACION,
-                        t.ACTUALIZACION,
-                        t.NUMERO_DOCUMENTO,
-                        t.PRIORIDADID,
-                        t.PRIORIDAD,
-                        t.UNIDAD,
-                        t.ORDEN,
-                        t.TIPO_DOMINIOID,
-                        t.TIPO_DOMINIO,
-                        t.TAREA,
-                        t.ESTADOAVANCE,
-                        t.VALIDACIONES,
-                        t.UNIDADES_AFECTADAS,
-                        t.UNIDADAFECTADA,
-                        t.UNIDADAFECTADA2,
-                        t.TIPO_TAREA,
-                        t.ESTADOSITUACION,
-                        t.ESTADOAVANCESUBTAREAPENDIENTE,
-                        t.ESTADOAVANCESUBTAREAVALIDADO,
-                        t.AJUSTESPENDIENTES,
-                        t.AJUSTESPENDIENTESVALIDACION,
-                        t.AJUSTESRECHAZADOS,
-                        t.NOTIFICACIONNUEVA,
-                        t.CIERRETAREA
-                    })
-                    .OrderBy(t => t.TITULO_FORMATO); // Ordenar por el formato ajustado
-                    // .AsQueryable();
-                    // .ToListAsync();
-
-
-                //Fin de filtros
-
-                //ExportExcel<TareaEstadisticasViewModel>((IEnumerable<TareaEstadisticasViewModel>)tareas);
-
-                var respTotal = tarea.Count();
-
-                //Inicializa variables de paginación
-                var pageResult = 10f;
-                var pageCount = Math.Ceiling(respTotal / pageResult);
-
-                var respuesta = await tarea
-                .Skip((page - 1) * (int)pageResult)//Paginación - salta los resultados de las páginas anteriores a la actuál
-                .Take((int)pageResult)//Paginación - selecciona solo la cantidad de registros definidos en la variable pageResult
-                .ToListAsync();
-
-                if (respuesta == null || respuesta.Count() == 0)
-                {
-
-                    var response = new ResponsePaginationModel
-                    {
-                        Data = "",
-                        CurrentPage = 0,
-                        Pages = 1
-                    };
-
-                    // resp.Data = ex.Message;
-                    resp.statusCode = 404;
-                    resp.Message = "No se encontraron resultados";
-
-                    Auditor.registroAuditor(
-                    "error", 404, User.GetClaimValue("IP"), int.Parse(User.GetClaimValue("Run")), int.Parse(User.GetClaimValue("Rol")),
-                    "Tareas/getTareas/", "No se encontraron resultados", JsonConvert.SerializeObject("page: " + page + ", planid: " + planid + ", tipo_tareaid: " + tipo_tareaid + ", busqueda: " + busqueda), _authContext
-                    );
-
-                    return Ok(response);
-                    // return NotFound(response);
-                    // return resp;
-                }
-                else
-                {
-                    var response = new ResponsePaginationModel
-                    {
-                        Data = respuesta,
-                        CurrentPage = page,
-                        Pages = (int)pageCount
-                    };
-
-                    Auditor.registroAuditor(
-                    "get", 200, User.GetClaimValue("IP"), int.Parse(User.GetClaimValue("Run")), int.Parse(User.GetClaimValue("Rol")),
-                    "Tareas/getTareas/", "Ok", JsonConvert.SerializeObject("page: " + page + ", planid: " + planid + ", tipo_tareaid: " + tipo_tareaid + ", busqueda: " + busqueda), _authContext
-                    );
-
-                    return Ok(response);
-                }
-            }
-            catch (Exception ex)
-            {
-                Auditor.registroAuditor(
-                    "error", 500, User.GetClaimValue("IP"), int.Parse(User.GetClaimValue("Run")), int.Parse(User.GetClaimValue("Rol")),
-                    "Tareas/getTareas/", ex.Message, JsonConvert.SerializeObject("page: " + page + ", planid: " + planid + ", tipo_tareaid: " + tipo_tareaid + ", busqueda: " + busqueda), _authContext
-                );
-
-                return BadRequest();
-            }
-        }
-
-"IEnumerable<<anonymous type: int ID, int PLANID, int TIPO_TAREAID, int PADREID, int NUMERO, Plan TIPO_PLANI
+public class TareaDto
+{
+    public int ID { get; set; }
+    public int PLANID { get; set; }
+    public int TIPO_TAREAID { get; set; }
+    public int PADREID { get; set; }
+    public int NUMERO { get; set; }
+    public Plan? TIPO_PLANID { get; set; }
+    public string? TITULO { get; set; }
+    public string? DESCRIPCION { get; set; }
+    public string? PROPOSITO { get; set; }
+    public string? UNIDADCODIGO { get; set; }
+    public DateTime? INICIO { get; set; }
+    public DateTime? PLAZO { get; set; }
+    public decimal? PONDERADO { get; set; }
+    public decimal? CUMPLIMIENTO { get; set; }
+    public decimal? CUMPLIMIENTO_REAL { get; set; }
+    public bool? PLANIFICADO { get; set; }
+    public int ESTADO { get; set; }
+    public DateTime? CREACION { get; set; }
+    public DateTime? ACTUALIZACION { get; set; }
+    public string? NUMERO_DOCUMENTO { get; set; }
+    public int? PRIORIDADID { get; set; }
+    public object? PRIORIDAD { get; set; }
+    public object? UNIDAD { get; set; }
+    public int? ORDEN { get; set; }
+    public int? TIPO_DOMINIOID { get; set; }
+    public object? TIPO_DOMINIO { get; set; }
+    public int TAREA { get; set; }
+    public int ESTADOAVANCE { get; set; }
+    public int VALIDACIONES { get; set; }
+    public List<object>? UNIDADES_AFECTADAS { get; set; }
+    public List<object>? UNIDADAFECTADA { get; set; }
+    public object? UNIDADAFECTADA2 { get; set; }
+    public object? TIPO_TAREA { get; set; }
+    public int ESTADOSITUACION { get; set; }
+    public int ESTADOAVANCESUBTAREAPENDIENTE { get; set; }
+    public int ESTADOAVANCESUBTAREAVALIDADO { get; set; }
+    public int AJUSTESPENDIENTES { get; set; }
+    public int AJUSTESPENDIENTESVALIDACION { get; set; }
+    public int AJUSTESRECHAZADOS { get; set; }
+    public int NOTIFICACIONNUEVA { get; set; }
+    public int CIERRETAREA { get; set; }
+}
