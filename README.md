@@ -70,11 +70,4 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
 
 
-SELECT 
-    mi_columna AS original,
-    REPLACE(
-        RIGHT('000' + REPLACE(mi_columna, '.', '000'), LEN(REPLACE(mi_columna, '.', '')) * 3),
-        '.',
-        ''
-    ) AS convertido
-FROM mi_tabla;
+TITULO_FORMATO = int.TryParse(t.TITULO.Replace(".", ""), out var numero) ? numero : 0, // Elimina puntos y convierte a número
