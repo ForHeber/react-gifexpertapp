@@ -73,3 +73,34 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/t
 TITULO_FORMATO = int.TryParse(t.TITULO.Replace(".", ""), out var numero) ? numero : 0, // Elimina puntos y convierte a número
 
 Un árbol de expresión no puede contener una declaración de variable de argumento out. [C:\U
+
+
+var tareas = (
+    from t in _sidcecontext.Tareas
+    where (t.ESTADO == 1 || t.ESTADO == 2 || t.ESTADO == 9 || t.ESTADO == 10)
+    select new
+    {
+        ID = t.ID,
+        PLANID = t.PLANID,
+        TIPO_TAREAID = t.TIPO_TAREAID,
+        PADREID = t.PADREID,
+        NUMERO = t.NUMERO,
+        TIPO_PLANID = _sidcecontext.Planes.Where(p => p.ID == t.PLANID).FirstOrDefault(),
+        TITULO = t.TITULO,
+        // Otros campos...
+    }
+).AsEnumerable() // Pasar a memoria
+.Select(t => new
+{
+    t.ID,
+    t.PLANID,
+    t.TIPO_TAREAID,
+    t.PADREID,
+    t.NUMERO,
+    t.TIPO_PLANID,
+    t.TITULO,
+    TITULO_FORMATO = int.TryParse(t.TITULO.Replace(".", ""), out var numero) ? numero : 0, // Procesamiento en memoria
+    // Otros campos...
+})
+.OrderBy(t => t.TITULO_FORMATO)
+.ToList();
