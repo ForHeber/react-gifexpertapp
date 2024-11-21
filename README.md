@@ -130,3 +130,105 @@ Un árbol de expresión no puede contener una declaración de variable de argume
 
 
 The source 'IQueryable' doesn't implement 'IAsyncEnumerable<<>f__AnonymousType55`42[System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,Sidce.Entidades.Tareas.Plan,System.String,System.String,System.String,System.String,System.String,System.Nullable`1[System.DateTime],System.Nullable`1[System.DateTime],System.Single,System.Single,System.Single,System.Single,System.Int32,System.DateTime,System.DateTime,System.String,System.Int32,<>f__AnonymousType37`2[System.Int32,System.String],Sidce.Entidades.EntidadesInstitucionales.Unidad,System.Int32,System.Int32,Sidce.Entidades.Mantenedores.Tipo_Dominio,System.Int32,System.Int32,System.Int32,System.Collections.Generic.List`1[Sidce.Entidades.Tareas.Tarea_Afecta_Unidad],System.Collections.Generic.List`1[Sidce.Entidades.EntidadesInstitucionales.Unidad],Sidce.Entidades.Tareas.Tarea_Afecta_Unidad,Sidce.Entidades.Mantenedores.Tipo_Tarea,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32]>'. Only sources that implement 'IAsyncEnumerable' can be used for Entity Framework asynchronous operations.
+
+
+
+var tareasMaterializadas = await tareas
+    .Select(t => new
+    {
+        t.ID,
+        t.PLANID,
+        t.TIPO_TAREAID,
+        t.PADREID,
+        t.NUMERO,
+        t.TIPO_PLANID,
+        t.TITULO,
+        t.DESCRIPCION,
+        t.PROPOSITO,
+        t.UNIDADCODIGO,
+        t.INICIO,
+        t.PLAZO,
+        t.PONDERADO,
+        t.CUMPLIMIENTO,
+        t.CUMPLIMIENTO_REAL,
+        t.PLANIFICADO,
+        t.ESTADO,
+        t.CREACION,
+        t.ACTUALIZACION,
+        t.NUMERO_DOCUMENTO,
+        t.PRIORIDADID,
+        t.PRIORIDAD,
+        t.UNIDAD,
+        t.ORDEN,
+        t.TIPO_DOMINIOID,
+        t.TIPO_DOMINIO,
+        t.TAREA,
+        t.ESTADOAVANCE,
+        t.VALIDACIONES,
+        t.UNIDADES_AFECTADAS,
+        t.UNIDADAFECTADA,
+        t.UNIDADAFECTADA2,
+        t.TIPO_TAREA,
+        t.ESTADOSITUACION,
+        t.ESTADOAVANCESUBTAREAPENDIENTE,
+        t.ESTADOAVANCESUBTAREAVALIDADO,
+        t.AJUSTESPENDIENTES,
+        t.AJUSTESPENDIENTESVALIDACION,
+        t.AJUSTESRECHAZADOS,
+        t.NOTIFICACIONNUEVA,
+        t.CIERRETAREA
+    })
+    .ToListAsync(); // Ejecuta la consulta asincrónicamente y materializa los datos
+
+// Aplicar transformaciones adicionales en memoria
+var tareasTransformadas = tareasMaterializadas
+    .Select(t => new
+    {
+        t.ID,
+        t.PLANID,
+        t.TIPO_TAREAID,
+        t.PADREID,
+        t.NUMERO,
+        t.TIPO_PLANID,
+        t.TITULO,
+        TITULO_FORMATO = string.Join("", t.TITULO
+            .Split('.') // Dividir por puntos
+            .Select(part => part.PadLeft(3, '0'))), // Rellenar con ceros a la izquierda
+        t.DESCRIPCION,
+        t.PROPOSITO,
+        t.UNIDADCODIGO,
+        t.INICIO,
+        t.PLAZO,
+        t.PONDERADO,
+        t.CUMPLIMIENTO,
+        t.CUMPLIMIENTO_REAL,
+        t.PLANIFICADO,
+        t.ESTADO,
+        t.CREACION,
+        t.ACTUALIZACION,
+        t.NUMERO_DOCUMENTO,
+        t.PRIORIDADID,
+        t.PRIORIDAD,
+        t.UNIDAD,
+        t.ORDEN,
+        t.TIPO_DOMINIOID,
+        t.TIPO_DOMINIO,
+        t.TAREA,
+        t.ESTADOAVANCE,
+        t.VALIDACIONES,
+        t.UNIDADES_AFECTADAS,
+        t.UNIDADAFECTADA,
+        t.UNIDADAFECTADA2,
+        t.TIPO_TAREA,
+        t.ESTADOSITUACION,
+        t.ESTADOAVANCESUBTAREAPENDIENTE,
+        t.ESTADOAVANCESUBTAREAVALIDADO,
+        t.AJUSTESPENDIENTES,
+        t.AJUSTESPENDIENTESVALIDACION,
+        t.AJUSTESRECHAZADOS,
+        t.NOTIFICACIONNUEVA,
+        t.CIERRETAREA
+    })
+    .OrderBy(t => t.TITULO_FORMATO) // Ordenar por el formato ajustado
+    .AsQueryable();
+
