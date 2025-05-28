@@ -1,0 +1,223 @@
+public class AdConfig
+{
+    public string LdapServer { get; set; }   // Ejemplo: "ldap.tudominio.com"
+    public int LdapPort { get; set; } = 389; // Puerto estándar LDAP
+    public string BaseDn { get; set; }       // Ejemplo: "DC=tudominio,DC=com"
+    public string Username { get; set; }     // Ejemplo: "usuario@tudominio.com"
+    public string Password { get; set; }
+}
+
+
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using Novell.Directory.Ldap;
+
+[ApiController]
+[Route("api/[controller]")]
+public class UsuariosAdController : ControllerBase
+{
+    private readonly AdConfig _config;
+
+    public UsuariosAdController(IOptions<AdConfig> config)
+    {
+        _config = config.Value;
+    }
+
+    private LdapConnection Connect()
+    {
+        var conn = new LdapConnection();
+        conn.Connect(_config.LdapServer, _config.LdapPort);
+        conn.Bind(_config.Username, _config.Password);
+        return conn;
+    }
+
+    [HttpGet("unidades")]
+    public IActionResult ListarOUs()
+    {
+        try
+        {
+            using var conn = Connect();
+            var search = conn.Search(
+                _config.BaseDn,
+                LdapConnection.SCOPE_SUB,
+                "(objectClass=organizationalUnit)",
+                null,
+                false
+            );
+
+            var result = new List<string>();
+            while (search.HasMore())
+            {
+                var entry = search.Next();
+                result.Add(entry.Dn);
+            }
+
+            return Ok(result);
+        }
+        catch (LdapException ex)
+        {
+            return StatusCode(500, $"LDAP error: {ex.Message}");
+        }
+    }
+
+    [HttpGet("usuarios/{ou}")]
+    public IActionResult ListarUsuariosEnOu(string ou)
+    {
+        try
+        {
+            using var conn = Connect();
+            string ouDn = $"OU={ou},{_config.BaseDn}";
+
+            var search = conn.Search(
+                ouDn,
+                LdapConnection.SCOPE_SUB,
+                "(objectClass=user)",
+                new[] { "sAMAccountName" },
+                false
+            );
+
+            var usuarios = new List<string>();
+            while (search.HasMore())
+            {
+                var entry = search.Next();
+                var userAttr = entry.getAttribute("sAMAccountName")?.StringValue;
+                if (!string.IsNullOrWhiteSpace(userAttr))
+                    usuarios.Add(userAttr);
+            }
+
+            return Ok(usuarios);
+        }
+        catch (LdapException ex)
+        {
+            return StatusCode(500, $"LDAP error: {ex.Message}");
+        }
+    }
+
+    [HttpGet("usuario/{samAccountName}")]
+    public IActionResult ObtenerUsuario(string samAccountName)
+    {
+        try
+        {
+            using var conn = Connect();
+
+            var search = conn.Search(
+                _config.BaseDn,
+                LdapConnection.SCOPE_SUB,
+                $"(sAMAccountName={samAccountName})",
+                new[] { "displayName", "mail", "sAMAccountName" },
+                false
+            );
+
+            if (!search.HasMore()) return NotFound("Usuario no encontrado");
+
+            var entry = search.Next();
+            var attrs = entry.getAttributeSet();
+
+            return Ok(new
+            {
+                Nombre = attrs.getAttribute("displayName")?.StringValue,
+                Correo = attrs.getAttribute("mail")?.StringValue,
+                Cuenta = attrs.getAttribute("sAMAccountName")?.StringValue
+            });
+        }
+        catch (LdapException ex)
+        {
+            return StatusCode(500, $"LDAP error: {ex.Message}");
+        }
+    }
+
+    // NOTA: Crear usuario y establecer contraseña directamente desde LDAP es complejo y no siempre posible
+    // sin extensiones propietarias o scripts externos. Aquí se muestra un ejemplo base:
+
+    [HttpPost("crear")]
+    public IActionResult CrearUsuario([FromBody] CrearUsuarioDto dto)
+    {
+        try
+        {
+            using var conn = Connect();
+            string userDn = $"CN={dto.Nombre},OU={dto.Ou},{_config.BaseDn}";
+
+            var attributes = new LdapAttributeSet
+            {
+                new LdapAttribute("objectClass", new[] { "top", "person", "organizationalPerson", "user" }),
+                new LdapAttribute("sAMAccountName", dto.Usuario),
+                new LdapAttribute("displayName", dto.Nombre),
+                new LdapAttribute("userPassword", dto.Clave) // Solo si AD lo permite
+            };
+
+            var entry = new LdapEntry(userDn, attributes);
+            conn.Add(entry);
+
+            return Ok("Usuario creado (si el servidor lo permite)");
+        }
+        catch (LdapException ex)
+        {
+            return StatusCode(500, $"LDAP error: {ex.Message}");
+        }
+    }
+
+    [HttpPut("editar/{usuario}")]
+    public IActionResult EditarUsuario(string usuario, [FromBody] EditarUsuarioDto dto)
+    {
+        try
+        {
+            using var conn = Connect();
+
+            var search = conn.Search(_config.BaseDn, LdapConnection.SCOPE_SUB, $"(sAMAccountName={usuario})", null, false);
+            if (!search.HasMore()) return NotFound("Usuario no encontrado");
+
+            var entry = search.Next();
+
+            var modifications = new List<LdapModification>
+            {
+                new LdapModification(LdapModification.REPLACE, new LdapAttribute("displayName", dto.Nombre)),
+                new LdapModification(LdapModification.REPLACE, new LdapAttribute("mail", dto.Mail))
+            };
+
+            conn.Modify(entry.Dn, modifications.ToArray());
+
+            return Ok("Usuario actualizado");
+        }
+        catch (LdapException ex)
+        {
+            return StatusCode(500, $"LDAP error: {ex.Message}");
+        }
+    }
+
+    [HttpDelete("eliminar/{usuario}")]
+    public IActionResult EliminarUsuario(string usuario)
+    {
+        try
+        {
+            using var conn = Connect();
+
+            var search = conn.Search(_config.BaseDn, LdapConnection.SCOPE_SUB, $"(sAMAccountName={usuario})", null, false);
+            if (!search.HasMore()) return NotFound("Usuario no encontrado");
+
+            var entry = search.Next();
+            conn.Delete(entry.Dn);
+
+            return Ok("Usuario eliminado");
+        }
+        catch (LdapException ex)
+        {
+            return StatusCode(500, $"LDAP error: {ex.Message}");
+        }
+    }
+}
+
+
+
+public class CrearUsuarioDto
+{
+    public string Ou { get; set; }
+    public string Nombre { get; set; }
+    public string Usuario { get; set; }
+    public string Clave { get; set; }
+}
+
+public class EditarUsuarioDto
+{
+    public string Nombre { get; set; }
+    public string Mail { get; set; }
+}
