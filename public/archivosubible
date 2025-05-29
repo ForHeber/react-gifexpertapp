@@ -28,8 +28,8 @@ public class UsuariosAdController : ControllerBase
     private async Task<LdapConnection> ConnectAsync()
     {
         var conn = new LdapConnection();
-        await conn.ConnectAsync(_config.LdapServer, _config.LdapPort);
-        await conn.BindAsync(_config.Username, _config.Password);
+        await Task.Run(() => conn.Connect(_config.LdapServer, _config.LdapPort));
+        await Task.Run(() => conn.Bind(_config.Username, _config.Password));
         return conn;
     }
 
@@ -41,14 +41,26 @@ public class UsuariosAdController : ControllerBase
             using var conn = await ConnectAsync();
             var result = new List<string>();
 
-            await foreach (var entry in conn.SearchAsync(
+            var search = conn.Search(
                 _config.BaseDn,
                 LdapConnection.ScopeSub,
                 "(objectClass=organizationalUnit)",
                 null,
-                false))
+                false
+            );
+
+            while (search.HasMore())
             {
-                result.Add(entry.Dn);
+                try
+                {
+                    var entry = search.Next();
+                    result.Add(entry.Dn);
+                }
+                catch (LdapException ex)
+                {
+                    if (ex.ResultCode == LdapException.NoSuchObject) continue;
+                    throw;
+                }
             }
 
             return Ok(result);
@@ -66,18 +78,30 @@ public class UsuariosAdController : ControllerBase
         {
             using var conn = await ConnectAsync();
             var usuarios = new List<string>();
-            var ouDn = $"OU={ou},{_config.BaseDn}";
+            string ouDn = $"OU={ou},{_config.BaseDn}";
 
-            await foreach (var entry in conn.SearchAsync(
+            var search = conn.Search(
                 ouDn,
                 LdapConnection.ScopeSub,
                 "(objectClass=user)",
                 new[] { "sAMAccountName" },
-                false))
+                false
+            );
+
+            while (search.HasMore())
             {
-                var user = entry.GetAttribute("sAMAccountName")?.StringValue;
-                if (!string.IsNullOrWhiteSpace(user))
-                    usuarios.Add(user);
+                try
+                {
+                    var entry = search.Next();
+                    var user = entry.GetAttribute("sAMAccountName")?.StringValue;
+                    if (!string.IsNullOrWhiteSpace(user))
+                        usuarios.Add(user);
+                }
+                catch (LdapException ex)
+                {
+                    if (ex.ResultCode == LdapException.NoSuchObject) continue;
+                    throw;
+                }
             }
 
             return Ok(usuarios);
@@ -94,22 +118,25 @@ public class UsuariosAdController : ControllerBase
         try
         {
             using var conn = await ConnectAsync();
-            await foreach (var entry in conn.SearchAsync(
+
+            var search = conn.Search(
                 _config.BaseDn,
                 LdapConnection.ScopeSub,
                 $"(sAMAccountName={samAccountName})",
                 new[] { "displayName", "mail", "sAMAccountName" },
-                false))
-            {
-                return Ok(new
-                {
-                    Nombre = entry.GetAttribute("displayName")?.StringValue,
-                    Correo = entry.GetAttribute("mail")?.StringValue,
-                    Cuenta = entry.GetAttribute("sAMAccountName")?.StringValue
-                });
-            }
+                false
+            );
 
-            return NotFound("Usuario no encontrado");
+            if (!search.HasMore()) return NotFound("Usuario no encontrado");
+
+            var entry = search.Next();
+
+            return Ok(new
+            {
+                Nombre = entry.GetAttribute("displayName")?.StringValue,
+                Correo = entry.GetAttribute("mail")?.StringValue,
+                Cuenta = entry.GetAttribute("sAMAccountName")?.StringValue
+            });
         }
         catch (LdapException ex)
         {
@@ -130,11 +157,11 @@ public class UsuariosAdController : ControllerBase
                 new LdapAttribute("objectClass", new[] { "top", "person", "organizationalPerson", "user" }),
                 new LdapAttribute("sAMAccountName", dto.Usuario),
                 new LdapAttribute("displayName", dto.Nombre),
-                new LdapAttribute("userPassword", dto.Clave) // Si el servidor lo permite
+                new LdapAttribute("userPassword", dto.Clave) // solo si el servidor lo permite
             };
 
             var entry = new LdapEntry(userDn, attributes);
-            await conn.AddAsync(entry);
+            conn.Add(entry);
 
             return Ok("Usuario creado (si el servidor lo permite)");
         }
@@ -150,19 +177,21 @@ public class UsuariosAdController : ControllerBase
         try
         {
             using var conn = await ConnectAsync();
-            await foreach (var entry in conn.SearchAsync(_config.BaseDn, LdapConnection.ScopeSub, $"(sAMAccountName={usuario})", null, false))
+
+            var search = conn.Search(_config.BaseDn, LdapConnection.ScopeSub, $"(sAMAccountName={usuario})", null, false);
+            if (!search.HasMore()) return NotFound("Usuario no encontrado");
+
+            var entry = search.Next();
+
+            var modifications = new List<LdapModification>
             {
-                var modifications = new List<LdapModification>
-                {
-                    new LdapModification(LdapModification.Replace, new LdapAttribute("displayName", dto.Nombre)),
-                    new LdapModification(LdapModification.Replace, new LdapAttribute("mail", dto.Mail))
-                };
+                new LdapModification(LdapModification.Replace, new LdapAttribute("displayName", dto.Nombre)),
+                new LdapModification(LdapModification.Replace, new LdapAttribute("mail", dto.Mail))
+            };
 
-                await conn.ModifyAsync(entry.Dn, modifications.ToArray());
-                return Ok("Usuario actualizado");
-            }
+            conn.Modify(entry.Dn, modifications.ToArray());
 
-            return NotFound("Usuario no encontrado");
+            return Ok("Usuario actualizado");
         }
         catch (LdapException ex)
         {
@@ -176,13 +205,14 @@ public class UsuariosAdController : ControllerBase
         try
         {
             using var conn = await ConnectAsync();
-            await foreach (var entry in conn.SearchAsync(_config.BaseDn, LdapConnection.ScopeSub, $"(sAMAccountName={usuario})", null, false))
-            {
-                await conn.DeleteAsync(entry.Dn);
-                return Ok("Usuario eliminado");
-            }
 
-            return NotFound("Usuario no encontrado");
+            var search = conn.Search(_config.BaseDn, LdapConnection.ScopeSub, $"(sAMAccountName={usuario})", null, false);
+            if (!search.HasMore()) return NotFound("Usuario no encontrado");
+
+            var entry = search.Next();
+            conn.Delete(entry.Dn);
+
+            return Ok("Usuario eliminado");
         }
         catch (LdapException ex)
         {
@@ -190,6 +220,7 @@ public class UsuariosAdController : ControllerBase
         }
     }
 }
+
 
 
 
