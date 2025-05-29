@@ -39,7 +39,7 @@ public class UsuariosAdController : ControllerBase
         try
         {
             using var conn = await ConnectAsync();
-            var results = await conn.SearchAsync(
+            var search = await conn.SearchAsync(
                 _config.BaseDn,
                 LdapConnection.ScopeSub,
                 "(objectClass=organizationalUnit)",
@@ -47,13 +47,13 @@ public class UsuariosAdController : ControllerBase
                 false
             );
 
-            var ous = new List<string>();
-            await foreach (var entry in results)
+            var result = new List<string>();
+            await foreach (var entry in search)
             {
-                ous.Add(entry.Dn);
+                result.Add(entry.Dn);
             }
 
-            return Ok(ous);
+            return Ok(result);
         }
         catch (LdapException ex)
         {
@@ -69,7 +69,7 @@ public class UsuariosAdController : ControllerBase
             using var conn = await ConnectAsync();
             string ouDn = $"OU={ou},{_config.BaseDn}";
 
-            var results = await conn.SearchAsync(
+            var search = await conn.SearchAsync(
                 ouDn,
                 LdapConnection.ScopeSub,
                 "(objectClass=user)",
@@ -78,9 +78,9 @@ public class UsuariosAdController : ControllerBase
             );
 
             var usuarios = new List<string>();
-            await foreach (var entry in results)
+            await foreach (var entry in search)
             {
-                var attr = entry.getAttributeSet().getAttribute("sAMAccountName");
+                var attr = entry.GetAttributeSet()?["sAMAccountName"];
                 if (attr != null)
                 {
                     usuarios.Add(attr.StringValue);
@@ -102,7 +102,7 @@ public class UsuariosAdController : ControllerBase
         {
             using var conn = await ConnectAsync();
 
-            var results = await conn.SearchAsync(
+            var search = await conn.SearchAsync(
                 _config.BaseDn,
                 LdapConnection.ScopeSub,
                 $"(sAMAccountName={samAccountName})",
@@ -110,14 +110,14 @@ public class UsuariosAdController : ControllerBase
                 false
             );
 
-            await foreach (var entry in results)
+            await foreach (var entry in search)
             {
-                var attrs = entry.getAttributeSet();
+                var attrs = entry.GetAttributeSet();
                 return Ok(new
                 {
-                    Nombre = attrs.getAttribute("displayName")?.StringValue,
-                    Correo = attrs.getAttribute("mail")?.StringValue,
-                    Cuenta = attrs.getAttribute("sAMAccountName")?.StringValue
+                    Nombre = attrs["displayName"]?.StringValue,
+                    Correo = attrs["mail"]?.StringValue,
+                    Cuenta = attrs["sAMAccountName"]?.StringValue
                 });
             }
 
@@ -142,7 +142,7 @@ public class UsuariosAdController : ControllerBase
                 new LdapAttribute("objectClass", new[] { "top", "person", "organizationalPerson", "user" }),
                 new LdapAttribute("sAMAccountName", dto.Usuario),
                 new LdapAttribute("displayName", dto.Nombre),
-                new LdapAttribute("userPassword", dto.Clave) // Puede no ser aceptado por AD
+                new LdapAttribute("userPassword", dto.Clave) // Puede no tener efecto en AD
             };
 
             var entry = new LdapEntry(userDn, attributes);
@@ -163,9 +163,8 @@ public class UsuariosAdController : ControllerBase
         {
             using var conn = await ConnectAsync();
 
-            var results = await conn.SearchAsync(_config.BaseDn, LdapConnection.ScopeSub, $"(sAMAccountName={usuario})", null, false);
-
-            await foreach (var entry in results)
+            var search = await conn.SearchAsync(_config.BaseDn, LdapConnection.ScopeSub, $"(sAMAccountName={usuario})", null, false);
+            await foreach (var entry in search)
             {
                 var modifications = new List<LdapModification>
                 {
@@ -192,9 +191,8 @@ public class UsuariosAdController : ControllerBase
         {
             using var conn = await ConnectAsync();
 
-            var results = await conn.SearchAsync(_config.BaseDn, LdapConnection.ScopeSub, $"(sAMAccountName={usuario})", null, false);
-
-            await foreach (var entry in results)
+            var search = await conn.SearchAsync(_config.BaseDn, LdapConnection.ScopeSub, $"(sAMAccountName={usuario})", null, false);
+            await foreach (var entry in search)
             {
                 await conn.DeleteAsync(entry.Dn);
                 return Ok("Usuario eliminado");
@@ -208,6 +206,7 @@ public class UsuariosAdController : ControllerBase
         }
     }
 }
+
 
 
 
