@@ -39,7 +39,7 @@ public class UsuariosAdController : ControllerBase
         try
         {
             using var conn = await ConnectAsync();
-            var search = await conn.SearchAsync(
+            var searchResults = await conn.SearchAsync(
                 _config.BaseDn,
                 LdapConnection.ScopeSub,
                 "(objectClass=organizationalUnit)",
@@ -47,14 +47,13 @@ public class UsuariosAdController : ControllerBase
                 false
             );
 
-            var result = new List<string>();
-            while (search.HasMore())
+            var unidades = new List<string>();
+            await foreach (var entry in searchResults)
             {
-                var entry = await search.NextAsync();
-                result.Add(entry.Dn);
+                unidades.Add(entry.Dn);
             }
 
-            return Ok(result);
+            return Ok(unidades);
         }
         catch (LdapException ex)
         {
@@ -63,42 +62,38 @@ public class UsuariosAdController : ControllerBase
     }
 
     [HttpGet("usuarios/{ou}")]
-public async Task<IActionResult> ListarUsuariosEnOu(string ou)
-{
-    try
+    public async Task<IActionResult> ListarUsuariosEnOu(string ou)
     {
-        using var conn = new LdapConnection();
-        await conn.ConnectAsync(_config.LdapServer, _config.LdapPort);
-        await conn.BindAsync(_config.Username, _config.Password);
-
-        string ouDn = $"OU={ou},{_config.BaseDn}";
-        var searchResults = await conn.SearchAsync(
-            ouDn,
-            LdapConnection.ScopeSub,
-            "(objectClass=user)",
-            new[] { "sAMAccountName" },
-            false
-        );
-
-        var results = (LdapSearchResults)searchResults;
-
-        var usuarios = new List<string>();
-        while (results.HasMore())
+        try
         {
-            var entry = results.Next();
-            var userAttr = entry.getAttribute("sAMAccountName")?.StringValue;
-            if (!string.IsNullOrWhiteSpace(userAttr))
-                usuarios.Add(userAttr);
+            using var conn = await ConnectAsync();
+            string ouDn = $"OU={ou},{_config.BaseDn}";
+
+            var searchResults = await conn.SearchAsync(
+                ouDn,
+                LdapConnection.ScopeSub,
+                "(objectClass=user)",
+                new[] { "sAMAccountName" },
+                false
+            );
+
+            var usuarios = new List<string>();
+            await foreach (var entry in searchResults)
+            {
+                var cn = entry.getAttribute("sAMAccountName")?.StringValue;
+                if (!string.IsNullOrWhiteSpace(cn))
+                {
+                    usuarios.Add(cn);
+                }
+            }
+
+            return Ok(usuarios);
         }
-
-        return Ok(usuarios);
+        catch (LdapException ex)
+        {
+            return StatusCode(500, $"LDAP error: {ex.Message}");
+        }
     }
-    catch (LdapException ex)
-    {
-        return StatusCode(500, $"LDAP error: {ex.Message}");
-    }
-}
-
 
     [HttpGet("usuario/{samAccountName}")]
     public async Task<IActionResult> ObtenerUsuario(string samAccountName)
@@ -106,8 +101,7 @@ public async Task<IActionResult> ListarUsuariosEnOu(string ou)
         try
         {
             using var conn = await ConnectAsync();
-
-            var search = await conn.SearchAsync(
+            var searchResults = await conn.SearchAsync(
                 _config.BaseDn,
                 LdapConnection.ScopeSub,
                 $"(sAMAccountName={samAccountName})",
@@ -115,17 +109,18 @@ public async Task<IActionResult> ListarUsuariosEnOu(string ou)
                 false
             );
 
-            if (!search.HasMore()) return NotFound("Usuario no encontrado");
-
-            var entry = await search.NextAsync();
-            var attrs = entry.getAttributeSet();
-
-            return Ok(new
+            await foreach (var entry in searchResults)
             {
-                Nombre = attrs.getAttribute("displayName")?.StringValue,
-                Correo = attrs.getAttribute("mail")?.StringValue,
-                Cuenta = attrs.getAttribute("sAMAccountName")?.StringValue
-            });
+                var attrs = entry.getAttributeSet();
+                return Ok(new
+                {
+                    Nombre = attrs.getAttribute("displayName")?.StringValue,
+                    Correo = attrs.getAttribute("mail")?.StringValue,
+                    Cuenta = attrs.getAttribute("sAMAccountName")?.StringValue
+                });
+            }
+
+            return NotFound("Usuario no encontrado");
         }
         catch (LdapException ex)
         {
@@ -146,7 +141,7 @@ public async Task<IActionResult> ListarUsuariosEnOu(string ou)
                 new LdapAttribute("objectClass", new[] { "top", "person", "organizationalPerson", "user" }),
                 new LdapAttribute("sAMAccountName", dto.Usuario),
                 new LdapAttribute("displayName", dto.Nombre),
-                new LdapAttribute("userPassword", dto.Clave) // Puede no funcionar en AD
+                new LdapAttribute("userPassword", dto.Clave) // Puede no funcionar si el AD no lo permite
             };
 
             var entry = new LdapEntry(userDn, attributes);
@@ -167,20 +162,27 @@ public async Task<IActionResult> ListarUsuariosEnOu(string ou)
         {
             using var conn = await ConnectAsync();
 
-            var search = await conn.SearchAsync(_config.BaseDn, LdapConnection.ScopeSub, $"(sAMAccountName={usuario})", null, false);
-            if (!search.HasMore()) return NotFound("Usuario no encontrado");
+            var searchResults = await conn.SearchAsync(
+                _config.BaseDn,
+                LdapConnection.ScopeSub,
+                $"(sAMAccountName={usuario})",
+                null,
+                false
+            );
 
-            var entry = await search.NextAsync();
-
-            var modifications = new List<LdapModification>
+            await foreach (var entry in searchResults)
             {
-                new LdapModification(LdapModification.Replace, new LdapAttribute("displayName", dto.Nombre)),
-                new LdapModification(LdapModification.Replace, new LdapAttribute("mail", dto.Mail))
-            };
+                var modifications = new List<LdapModification>
+                {
+                    new LdapModification(LdapModification.Replace, new LdapAttribute("displayName", dto.Nombre)),
+                    new LdapModification(LdapModification.Replace, new LdapAttribute("mail", dto.Mail))
+                };
 
-            await conn.ModifyAsync(entry.Dn, modifications.ToArray());
+                await conn.ModifyAsync(entry.Dn, modifications.ToArray());
+                return Ok("Usuario actualizado");
+            }
 
-            return Ok("Usuario actualizado");
+            return NotFound("Usuario no encontrado");
         }
         catch (LdapException ex)
         {
@@ -195,13 +197,21 @@ public async Task<IActionResult> ListarUsuariosEnOu(string ou)
         {
             using var conn = await ConnectAsync();
 
-            var search = await conn.SearchAsync(_config.BaseDn, LdapConnection.ScopeSub, $"(sAMAccountName={usuario})", null, false);
-            if (!search.HasMore()) return NotFound("Usuario no encontrado");
+            var searchResults = await conn.SearchAsync(
+                _config.BaseDn,
+                LdapConnection.ScopeSub,
+                $"(sAMAccountName={usuario})",
+                null,
+                false
+            );
 
-            var entry = await search.NextAsync();
-            await conn.DeleteAsync(entry.Dn);
+            await foreach (var entry in searchResults)
+            {
+                await conn.DeleteAsync(entry.Dn);
+                return Ok("Usuario eliminado");
+            }
 
-            return Ok("Usuario eliminado");
+            return NotFound("Usuario no encontrado");
         }
         catch (LdapException ex)
         {
