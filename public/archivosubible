@@ -63,37 +63,42 @@ public class UsuariosAdController : ControllerBase
     }
 
     [HttpGet("usuarios/{ou}")]
-    public async Task<IActionResult> ListarUsuariosEnOu(string ou)
+public async Task<IActionResult> ListarUsuariosEnOu(string ou)
+{
+    try
     {
-        try
+        using var conn = new LdapConnection();
+        await conn.ConnectAsync(_config.LdapServer, _config.LdapPort);
+        await conn.BindAsync(_config.Username, _config.Password);
+
+        string ouDn = $"OU={ou},{_config.BaseDn}";
+        var searchResults = await conn.SearchAsync(
+            ouDn,
+            LdapConnection.ScopeSub,
+            "(objectClass=user)",
+            new[] { "sAMAccountName" },
+            false
+        );
+
+        var results = (LdapSearchResults)searchResults;
+
+        var usuarios = new List<string>();
+        while (results.HasMore())
         {
-            using var conn = await ConnectAsync();
-            string ouDn = $"OU={ou},{_config.BaseDn}";
-
-            var search = await conn.SearchAsync(
-                ouDn,
-                LdapConnection.ScopeSub,
-                "(objectClass=user)",
-                new[] { "sAMAccountName" },
-                false
-            );
-
-            var usuarios = new List<string>();
-            while (search.HasMore())
-            {
-                var entry = await search.NextAsync();
-                var userAttr = entry.getAttribute("sAMAccountName")?.StringValue;
-                if (!string.IsNullOrWhiteSpace(userAttr))
-                    usuarios.Add(userAttr);
-            }
-
-            return Ok(usuarios);
+            var entry = results.Next();
+            var userAttr = entry.getAttribute("sAMAccountName")?.StringValue;
+            if (!string.IsNullOrWhiteSpace(userAttr))
+                usuarios.Add(userAttr);
         }
-        catch (LdapException ex)
-        {
-            return StatusCode(500, $"LDAP error: {ex.Message}");
-        }
+
+        return Ok(usuarios);
     }
+    catch (LdapException ex)
+    {
+        return StatusCode(500, $"LDAP error: {ex.Message}");
+    }
+}
+
 
     [HttpGet("usuario/{samAccountName}")]
     public async Task<IActionResult> ObtenerUsuario(string samAccountName)
