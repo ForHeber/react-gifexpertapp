@@ -1,0 +1,126 @@
+<template>
+  <bar-chart 
+    :options="{
+      xaxis: {
+        categories: chartDataSets.basicPieOptions.labels,
+      },
+      yaxis: {
+        max: 100,
+        labels: {
+          align: 'left',
+          offsetX: -15,
+          style: {
+            fontSize: '12px',
+            colors: [ colorFuente ],
+            fontWeight: 'bold',
+          },
+          maxWidth: 400,
+          overflow: 'auto',
+          textOverflow: 'clip',
+          whiteSpace: 'nowrap',
+        },
+      },
+      dataLabels: {
+        enabled: true,
+        formatter: function(val) {
+          return val + '%';
+        },
+        offsetX: 40,
+        style: {
+          fontSize: '12px',
+          colors: [ colorFuente ]
+        }
+      },
+      plotOptions: {
+        bar: {
+          barHeight: '40%',
+          borderRadius: 4,
+          borderRadiusApplication: 'end',
+          horizontal: true,
+          distributed: true, // ✅ permite colores por barra
+          dataLabels: {
+            position: 'top',
+          }
+        },
+      },
+      colors: barColors, // ✅ colores calculados por label y valor
+      theme: {
+        mode: tema,
+      },
+      stroke: {
+        curve: 'smooth',
+      },
+      title: {
+        text: chartDataSets.basicPieOptions.title,
+        align: 'center',
+      },
+      tooltip: {
+        enabled: false,
+      },
+    }"
+    :series="[
+      {
+        data: chartDataSets.basicPieSeries,
+      }
+    ]"
+    type="bar"
+    :height="alto"
+  />
+</template>
+
+<script>
+import VueApexCharts from "vue-apexcharts";
+
+export default {
+  components: {
+    BarChart: VueApexCharts,
+  },
+  props: {
+    chartDataSets: {
+      type: Object,
+      required: true,
+    },
+    monochrome: {
+      type: Boolean,
+      default: false,
+    },
+    size: {
+      type: Number,
+      required: true
+    }
+  },
+  computed: {
+    tema() {
+      return this.$vuetify.theme.isDark ? 'dark' : 'light';
+    },
+    colorFuente() {
+      return this.$vuetify.theme.isDark ? '#FFFFFF' : '#000000';
+    },
+    alto() {
+      return `${this.size}px`;
+    },
+    barColors() {
+      const valores = this.chartDataSets.basicPieSeries;
+      const labels = this.chartDataSets.basicPieOptions.labels;
+
+      return labels.map((label, i) => {
+        const valor = valores[i];
+
+        if (label === 'Cliente VIP') {
+          if (valor <= 46) return '#DB1F20';
+          if (valor <= 67) return '#D98520';
+          if (valor <= 85) return '#8DBF2D';
+          return '#358D36';
+        }
+
+        // Color fijo para todas las demás barras
+        return '#1E90FF';
+      });
+    }
+  },
+  mounted() {
+    console.log('data:', this.chartDataSets)
+  }
+};
+</script>
+
